@@ -1,4 +1,3 @@
-from agent import *
+from agent import Agent
 
-agent = create_agent()
-run_agent(agent)
+agent = Agent().run_agent()
