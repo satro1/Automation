@@ -10,3 +10,5 @@ blocksize = 8000
 channels = 1
 rec = KaldiRecognizer(model, samplerate)
 q = queue.Queue()
+
+gpt_model = "openai:gpt-5-nano"
