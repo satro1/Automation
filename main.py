@@ -4,8 +4,8 @@ import constants
 
 def parse_args():
 	p = argparse.ArgumentParser(description="Run the automation agent in speech or text mode")
-	p.add_argument("--mode", choices=["speech", "text", "auto"], default="auto",
-				   help="Operation mode: 'speech' to use microphone (requires a VOSK model), 'text' to use typed input, 'auto' to use speech if available else text")
+	p.add_argument("--mode", choices=["speech", "text", "auto"], default="text",
+		           help="Operation mode: 'speech' to use microphone (requires a VOSK model), 'text' to use typed input (default), 'auto' to use speech if available else text")
 	p.add_argument("--model-path", help="Optional path to VOSK model directory to use when --mode=speech or when loading in auto mode")
 	return p.parse_args()
 
@@ -28,7 +28,7 @@ def main():
 
 	# Import Agent and run after we attempted any model loading above.
 	from agent import Agent
-	Agent().run_agent()
+	Agent(mode=args.mode).run_agent()
 
 
 if __name__ == "__main__":
