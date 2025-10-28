@@ -20,6 +20,14 @@ def callback(indata, frames, time, status):
     constants.q.put(bytes(indata))
 
 def s2t():
+    # If recognizer wasn't created (e.g., model failed to load), fall back to typed input.
+    if constants.rec is None:
+        print("Speech recognizer unavailable — falling back to typed input.")
+        try:
+            return input("Type your input: ")
+        except EOFError:
+            return ""
+
     with sd.RawInputStream(samplerate=constants.samplerate, blocksize=constants.blocksize, dtype='int16',
                         channels=constants.channels, callback=callback):
         print("Speak… Ctrl+C to stop.")
