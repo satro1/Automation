@@ -1,3 +1,4 @@
+import os
 import subprocess, urllib.parse, requests
 from typing import Optional
 from bs4 import BeautifulSoup
@@ -256,3 +257,123 @@ def get_options_chain(symbol: str, date: Optional[str] = None, top_n: int = 10) 
 
 # export new tools
 tools.extend([get_stock_quote, get_historical, get_options_chain])
+
+
+def send_gmail(to_address: str, subject: str, body: str, cc: Optional[str] = None, bcc: Optional[str] = None, html: bool = False) -> str:
+    """Send an email via Gmail SMTP.
+
+    Authentication:
+    - Provide credentials via environment variables GMAIL_USER and GMAIL_PASS.
+      GMAIL_PASS should be an app password if your account has 2FA.
+    - Example:
+      export GMAIL_USER="you@gmail.com"
+      export GMAIL_PASS="your_app_password"
+
+    Returns a status message on success or instructions on missing credentials.
+    """
+    import smtplib
+    from email.message import EmailMessage
+
+    user = os.environ["GMAIL_USER"]
+    password = os.environ["GMAIL_PASS"]
+    print("user:", user)
+    print("password:", password)
+    if not user or not password:
+        return ("Missing Gmail credentials. Set environment variables GMAIL_USER and GMAIL_PASS.\n"
+                "If you use 2FA, create an app password in your Google Account and use it as GMAIL_PASS.")
+
+    msg = EmailMessage()
+    msg['From'] = user
+    msg['To'] = to_address
+    if cc:
+        msg['Cc'] = cc
+    msg['Subject'] = subject
+    if html:
+        msg.add_alternative(body, subtype='html')
+    else:
+        msg.set_content(body)
+
+    recipients = [to_address]
+    if cc:
+        recipients += [c.strip() for c in cc.split(',') if c.strip()]
+    if bcc:
+        recipients += [b.strip() for b in bcc.split(',') if b.strip()]
+
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=20) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.send_message(msg, from_addr=user, to_addrs=recipients)
+        return f"Email sent to {to_address} (cc={cc or ''} bcc={bcc or ''})"
+    except Exception as e:
+        return f"Failed to send email: {e}"
+
+
+def read_gmail(folder: str = 'INBOX', criteria: str = 'ALL', limit: int = 10) -> str:
+    """Read messages from Gmail via IMAP and return a short summary.
+
+    Authentication: same as send_gmail (GMAIL_USER / GMAIL_PASS env vars).
+    `criteria` is an IMAP search criteria string, e.g., 'UNSEEN', 'FROM "abc@"', 'SINCE 01-Jan-2025', or 'ALL'.
+    """
+    import imaplib
+    import email
+
+    user = os.environ["GMAIL_USER"]
+    password = os.environ["GMAIL_PASS"]
+    print("user:", user)
+    print("password:", password)
+    if not user or not password:
+        return ("Missing Gmail credentials. Set environment variables GMAIL_USER and GMAIL_PASS.\n"
+                "If you use 2FA, create an app password in your Google Account and use it as GMAIL_PASS.")
+
+    try:
+        imap = imaplib.IMAP4_SSL('imap.gmail.com')
+        imap.login(user, password)
+        imap.select(folder)
+        typ, data = imap.search(None, criteria)
+        if typ != 'OK':
+            imap.logout()
+            return f"IMAP search failed: {typ}"
+        ids = data[0].split()
+        if not ids:
+            imap.logout()
+            return "No messages found."
+        # get last `limit` messages
+        ids = ids[-limit:]
+        summaries = []
+        for num in reversed(ids):
+            typ, msg_data = imap.fetch(num, '(RFC822)')
+            if typ != 'OK':
+                continue
+            raw = msg_data[0][1]
+            msg = email.message_from_bytes(raw)
+            subj = msg.get('Subject', '(no subject)')
+            frm = msg.get('From', '')
+            date = msg.get('Date', '')
+            # extract a short snippet
+            snippet = ''
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ctype = part.get_content_type()
+                    if ctype == 'text/plain' and not part.get('Content-Disposition'):
+                        try:
+                            snippet = part.get_payload(decode=True).decode(errors='ignore').strip()
+                            break
+                        except Exception:
+                            continue
+            else:
+                try:
+                    snippet = msg.get_payload(decode=True).decode(errors='ignore').strip()
+                except Exception:
+                    snippet = ''
+            snippet = (snippet or '')[:400].replace('\n', ' ')
+            summaries.append(f"From: {frm}\nSubject: {subj}\nDate: {date}\nSnippet: {snippet}")
+        imap.logout()
+        return "\n\n".join(summaries)
+    except Exception as e:
+        return f"Failed to read Gmail: {e}"
+
+
+# add gmail tools to exported list
+tools.extend([send_gmail, read_gmail])
